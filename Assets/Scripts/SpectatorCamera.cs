@@ -1,64 +1,61 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-namespace MiddleAgents
-{
-    [RequireComponent(typeof(Camera))]
-    public sealed class SpectatorCamera : MonoBehaviour
-    {
-        [SerializeField] private float moveSpeed = 30f;
-        [SerializeField] private float acceleration = 150f;
-        [SerializeField] private float fastMultiplier = 3.5f;
-        [SerializeField] private float slowMultiplier = 0.3f;
-        [SerializeField] private float zoomSpeed = 5f;
+[RequireComponent(typeof(Camera))]
+public sealed class SpectatorCamera : MonoBehaviour {
+    // the camera moves right away, and shift gives it a speed boost
+    [SerializeField] private float moveSpeed = 50f;
+    [SerializeField] private float shiftSpeedMultiplier = 2.5f;
 
-        private Camera view;
-        private Vector2 velocity;
-        private float targetZoom = 22f;
+    private Camera view;
 
-        private void Awake()
-        {
-            view = GetComponent<Camera>();
-            view.orthographic = true;
-            view.orthographicSize = targetZoom;
-            view.backgroundColor = new Color(0.13f, 0.20f, 0.22f);
+    private void Awake() {
+        view = GetComponent<Camera>();
+        // an orthographic camera keeps the top-down pixel map flat
+        view.orthographic = true;
+        view.orthographicSize = 22f;
+        view.backgroundColor = new Color(0.13f, 0.20f, 0.22f);
+    }
+
+    private void Update() {
+        var keyboard = Keyboard.current;
+        
+        if (keyboard == null) {
+            return;
         }
 
-        private void Update()
-        {
-            Keyboard keyboard = Keyboard.current;
-            Mouse mouse = Mouse.current;
-            if (keyboard == null) return;
+        // opposite keys cancel each other out
+        Vector2 input = Vector2.zero;
+        if (keyboard.wKey.isPressed) {
+            input.y++;
+        }
 
-            Vector2 input = Vector2.zero;
-            if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed) input.y++;
-            if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed) input.y--;
-            if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed) input.x++;
-            if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed) input.x--;
+        if (keyboard.sKey.isPressed) {
+            input.y--;
+        }
 
-            float multiplier = keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed
-                ? fastMultiplier : keyboard.leftCtrlKey.isPressed || keyboard.rightCtrlKey.isPressed
-                ? slowMultiplier : 1f;
-            Vector2 wanted = input.normalized * moveSpeed * multiplier * (view.orthographicSize / 22f);
-            velocity = Vector2.MoveTowards(velocity, wanted, acceleration * Time.unscaledDeltaTime);
-            transform.position += (Vector3)(velocity * Time.unscaledDeltaTime);
+        if (keyboard.dKey.isPressed) {
+            input.x++;
+        }
 
-            if (mouse != null)
-            {
-                if (mouse.rightButton.isPressed)
-                {
-                    Vector2 drag = mouse.delta.ReadValue();
-                    float unitsPerPixel = view.orthographicSize * 2f / Screen.height;
-                    transform.position -= (Vector3)(drag * unitsPerPixel);
-                }
+        if (keyboard.aKey.isPressed) {
+            input.x--;
+        }
 
-                float wheel = mouse.scroll.ReadValue().y;
-                if (Mathf.Abs(wheel) > 0.01f)
-                    targetZoom = Mathf.Clamp(targetZoom * Mathf.Exp(-Mathf.Sign(wheel) * 0.15f), 7f, 75f);
+        // normalized input keeps diagonal movement at the same speed
+        bool shiftHeld = keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed;
+        float currentSpeed = moveSpeed * (shiftHeld ? shiftSpeedMultiplier : 1f);
+        transform.position += (Vector3) (input.normalized * (currentSpeed * Time.deltaTime));
+
+        var mouse = Mouse.current;
+        
+        if (mouse != null) {
+            float wheel = mouse.scroll.ReadValue().y;
+            if (Mathf.Abs(wheel) > 0.01f) {
+                // one wheel step changes the zoom right away
+                view.orthographicSize = Mathf.Clamp(view.orthographicSize
+                                                    * Mathf.Exp(-Mathf.Sign(wheel) * 0.15f), 7f, 75f);
             }
-
-            view.orthographicSize = Mathf.MoveTowards(view.orthographicSize, targetZoom,
-                zoomSpeed * Mathf.Max(1f, view.orthographicSize * 0.5f) * Time.unscaledDeltaTime);
         }
     }
 }
